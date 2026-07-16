@@ -1,0 +1,182 @@
+// Esquema de la plataforma DeCA (Documento electrónico de Control Administrativo)
+// Basado en la Orden FOM/2861/2012, la DT8 de la Ley 9/2025 de Movilidad Sostenible
+// y la Resolución de la Subdirección General de Inspección de Transporte por Carretera y Ferrocarril.
+//
+// SQLite no soporta enums nativos en Prisma: los "enum" conceptuales de este dominio
+// (Role, EntityType, DecaStatus, SignatureType, ModificationType) se modelan como String
+// y sus valores válidos se definen y validan en lib/constants.ts.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+model Entity {
+  id        String   @id @default(cuid())
+  type      String // CARGADOR | TRANSPORTISTA
+  name      String
+  nif       String
+  domicilio String?
+  createdAt DateTime @default(now())
+
+  users               User[]
+  decaAsCargador      DecaDocument[] @relation("CargadorContractual")
+  decaAsTransportista DecaDocument[] @relation("TransportistaEfectivo")
+  vehiculos           Vehiculo[]
+  conductores         Conductor[]
+}
+
+// Flota de vehículos del transportista efectivo (lista reutilizable: número limitado de
+// matrículas disponibles). Se selecciona al crear/modificar un DeCA en lugar de escribir
+// la matrícula a mano.
+model Vehiculo {
+  id                    String   @id @default(cuid())
+  transportistaEntityId String
+  transportistaEntity   Entity   @relation(fields: [transportistaEntityId], references: [id])
+  matricula             String
+  remolque              String?
+  activo                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  decaDocuments DecaDocument[]
+}
+
+// Listado reutilizable de conductores del transportista efectivo.
+model Conductor {
+  id                    String   @id @default(cuid())
+  transportistaEntityId String
+  transportistaEntity   Entity   @relation(fields: [transportistaEntityId], references: [id])
+  nombre                String
+  dni                   String
+  activo                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  decaDocuments DecaDocument[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String // ADMIN | CARGADOR | TRANSPORTISTA
+  entityId     String?
+  entity       Entity?  @relation(fields: [entityId], references: [id])
+  createdAt    DateTime @default(now())
+
+  decaCreated      DecaDocument[]
+  modificationLogs ModificationLog[]
+}
+
+model DecaDocument {
+  id    String @id @default(cuid())
+  docId String @unique // slug aleatorio no adivinable usado en la URL pública /d/[docId]
+
+  // a) Cargador contractual / b) Transportista efectivo
+  cargadorEntityId      String
+  cargadorEntity        Entity @relation("CargadorContractual", fields: [cargadorEntityId], references: [id])
+  transportistaEntityId String
+  transportistaEntity   Entity @relation("TransportistaEfectivo", fields: [transportistaEntityId], references: [id])
+
+  // Cuenta analítica / proyecto (campo libre)
+  cuentaAnalitica String?
+
+  // Conductor (lista reutilizable del transportista efectivo) — snapshot de nombre/DNI
+  // en el momento de guardar, por si el conductor se da de baja más adelante.
+  conductorId     String?
+  conductor       Conductor? @relation(fields: [conductorId], references: [id])
+  conductorNombre String
+  conductorDni    String
+
+  // e) Autorización especial de circulación / f) fecha
+  fecha                 DateTime
+  autorizacionEspecial  String?
+
+  // g) Matrícula (lista reutilizable del transportista efectivo) — snapshot de
+  // matrícula/remolque en el momento de guardar. Cualquier cambio de vehículo entre
+  // versiones queda registrado automáticamente en ModificationLog (ver Quinto).
+  vehiculoId String?
+  vehiculo   Vehiculo? @relation(fields: [vehiculoId], references: [id])
+  matricula  String
+  remolque   String?
+
+  // h) Observaciones
+  observacionesCargador      String?
+  observacionesTransportista String?
+
+  // Cuarto de la resolución: firmas — solo si el DeCA también tiene finalidad
+  // contractual. Un bloque independiente por cada parte que deba firmar.
+  cargadorSignatureType String  @default("NONE") // NONE | ADVANCED | QUALIFIED
+  cargadorSignerName    String?
+  cargadorSignedAt      DateTime?
+
+  transportistaSignatureType String  @default("NONE")
+  transportistaSignerName    String?
+  transportistaSignedAt      DateTime?
+
+  destinatarioNombre         String?
+  destinatarioNif            String?
+  destinatarioSignatureType  String  @default("NONE")
+  destinatarioSignerName     String?
+  destinatarioSignedAt       DateTime?
+
+  // Ciclo de vida del servicio / documento
+  serviceStartDate DateTime?
+  serviceEndDate   DateTime? // a partir de esta fecha + 7 días naturales se puede desactivar la descarga
+  status           String    @default("ACTIVE") // ACTIVE | SUPERSEDED | DOWNLOAD_DISABLED
+  disabledAt       DateTime?
+
+  // Fichero PDF (nativo digital, máx. 5MB) — Segundo de la resolución
+  pdfPath      String
+  pdfSizeBytes Int
+  createdAt    DateTime @default(now()) // metadato de creación
+  updatedAt    DateTime @updatedAt // metadato de modificación
+
+  // Versionado: "generar un PDF nuevo" crea un registro nuevo enlazado al anterior
+  previousVersionId String?
+  previousVersion    DecaDocument?  @relation("VersionChain", fields: [previousVersionId], references: [id])
+  nextVersions       DecaDocument[] @relation("VersionChain")
+
+  createdByUserId String
+  createdByUser   User   @relation(fields: [createdByUserId], references: [id])
+
+  envios           Envio[]
+  modificationLogs ModificationLog[]
+}
+
+// Sexto de la resolución: agrupación de varios envíos en un único DeCA,
+// siempre con mismo cargador contractual y mismo transportista efectivo,
+// identificando cada envío por origen, destino y mercancía.
+model Envio {
+  id             String       @id @default(cuid())
+  decaDocumentId String
+  decaDocument   DecaDocument @relation(fields: [decaDocumentId], references: [id], onDelete: Cascade)
+
+  origen    String
+  destino   String
+  mercancia String
+  bultos    Int?
+  pesoKg    Float?
+  volumenM3 Float?
+}
+
+model ModificationLog {
+  id             String       @id @default(cuid())
+  decaDocumentId String
+  decaDocument   DecaDocument @relation(fields: [decaDocumentId], references: [id], onDelete: Cascade)
+
+  type      String // UPDATE_SAME | NEW_VERSION
+  motivo    String
+  // Diff estructurado campo a campo (JSON: [{ field, label, before, after }]) — permite
+  // mostrar en el PDF y en la app QUÉ cambió exactamente, no solo el motivo en texto libre.
+  changesJson String?
+  changedAt DateTime @default(now())
+
+  changedByUserId String
+  changedByUser   User   @relation(fields: [changedByUserId], references: [id])
+}
