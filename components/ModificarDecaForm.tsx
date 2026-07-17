@@ -22,12 +22,14 @@ function SubmitButton() {
 
 export default function ModificarDecaForm({
   decaId,
-  fecha,
   autorizacionEspecial,
   observacionesCargador,
   observacionesTransportista,
   serviceEndDate,
   cuentaAnalitica,
+  expedidorNombre,
+  expedidorNif,
+  expedidorDireccion,
   envios,
   cargadores,
   transportistas,
@@ -39,12 +41,14 @@ export default function ModificarDecaForm({
   currentConductorId,
 }: {
   decaId: string;
-  fecha: string;
   autorizacionEspecial: string;
   observacionesCargador: string;
   observacionesTransportista: string;
   serviceEndDate: string;
   cuentaAnalitica: string;
+  expedidorNombre: string;
+  expedidorNif: string;
+  expedidorDireccion: string;
   envios: EnvioRow[];
   cargadores: EntityOption[];
   transportistas: EntityOption[];
@@ -147,6 +151,15 @@ export default function ModificarDecaForm({
         </div>
       </div>
 
+      <div className="card p-5">
+        <label className="label">Expedidor</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input className="input" name="expedidorNombre" placeholder="Nombre" defaultValue={expedidorNombre} />
+          <input className="input" name="expedidorNif" placeholder="NIF" defaultValue={expedidorNif} />
+          <input className="input" name="expedidorDireccion" placeholder="Dirección" defaultValue={expedidorDireccion} />
+        </div>
+      </div>
+
       <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">g) Vehículo (matrícula)</label>
@@ -178,11 +191,7 @@ export default function ModificarDecaForm({
         <EnviosEditor initial={envios} />
       </div>
 
-      <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="label">f) Fecha del transporte</label>
-          <input className="input" type="date" name="fecha" defaultValue={fecha} required />
-        </div>
+      <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">e) Autorización especial</label>
           <input className="input" name="autorizacionEspecial" defaultValue={autorizacionEspecial} />

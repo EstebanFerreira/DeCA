@@ -16,7 +16,9 @@ Plataforma web para la creación y consulta de **Documentos electrónicos de Con
 - Generación de un **PDF nativo digital** (no escaneado) con metadatos de fecha/hora de creación y modificación, tamaño máximo 5MB, y **código QR** con la URL de descarga.
 - **URL pública `/d/[docId]`** sin login, sin certificado ni botones — acceso inmediato para control en carretera (Tercero de la resolución). Se desactiva automáticamente a los 7 días naturales tras el fin del servicio, o manualmente desde el panel.
 - **Modificación de datos** durante el servicio con las dos modalidades previstas (Quinto de la resolución): actualizar el PDF existente (misma URL/QR) o generar un PDF nuevo (nueva URL/QR). Se puede modificar cualquier dato, incluidos el cargador contractual y el transportista efectivo. Cada modificación exige un motivo y el sistema calcula automáticamente el **diff campo a campo** (p. ej. matrícula anterior → nueva); el **historial completo de todas las modificaciones** (no solo la última) se guarda y se incluye íntegro en el PDF descargado y en la pantalla de detalle.
-- **Tres bloques de firma independientes** — Cargador contractual, Transportista efectivo y Destinatario — cada uno con firma electrónica avanzada/cualificada (eIDAS) opcional (Cuarto de la resolución).
+- **Firmas de Cargador contractual y Transportista efectivo** a nivel de documento completo, cada una con firma electrónica avanzada/cualificada (eIDAS) opcional (Cuarto de la resolución).
+- **Expedidor** (Nombre, NIF, Dirección) como apartado propio del documento, distinto del cargador contractual.
+- **Cada envío es independiente**: dentro de un mismo DeCA agrupado, cada envío tiene su propio destinatario (Nombre/NIF/Dirección) con su propia firma de entrega, direcciones completas de origen y destino, y sus 3 fechas (realización del transporte, entrega prevista, entrega efectiva) — porque los envíos agrupados pueden ir a destinos, personas y momentos distintos.
 - Panel de administración para crear entidades (cargadores/transportistas) y usuarios, y panel de flota/conductores (accesible también al rol Transportista para gestionar su propia flota).
 
 ## Stack

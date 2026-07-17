@@ -21,19 +21,18 @@ type SignatureInput = { type: 'NONE' | 'ADVANCED' | 'QUALIFIED'; signerName?: st
 export type CreateDecaParams = {
   cargadorEntityId: string;
   transportistaEntityId: string;
+  expedidorNombre?: string | null;
+  expedidorNif?: string | null;
+  expedidorDireccion?: string | null;
   cuentaAnalitica?: string | null;
   conductorId: string;
   vehiculoId: string;
   envios: EnvioInput[];
-  fecha: Date;
   autorizacionEspecial?: string | null;
   observacionesCargador?: string | null;
   observacionesTransportista?: string | null;
   cargadorSignature: SignatureInput;
   transportistaSignature: SignatureInput;
-  destinatarioNombre?: string | null;
-  destinatarioNif?: string | null;
-  destinatarioSignature: SignatureInput;
   serviceStartDate?: Date | null;
   serviceEndDate?: Date | null;
   createdByUserId: string;
@@ -56,6 +55,69 @@ function toSignatureBlock(type: string, signerName: string | null, signedAt: Dat
   return { type: type as SignatureBlockInput['type'], signerName, signedAt };
 }
 
+function envioToPrismaCreate(e: EnvioInput) {
+  return {
+    origen: e.origen,
+    origenDireccion: e.origenDireccion || null,
+    destino: e.destino,
+    destinoDireccion: e.destinoDireccion || null,
+    mercancia: e.mercancia,
+    bultos: e.bultos ?? null,
+    pesoKg: e.pesoKg ?? null,
+    volumenM3: e.volumenM3 ?? null,
+    destinatarioNombre: e.destinatarioNombre || null,
+    destinatarioNif: e.destinatarioNif || null,
+    destinatarioDireccion: e.destinatarioDireccion || null,
+    destinatarioSignatureType: e.destinatarioSignature?.type || 'NONE',
+    destinatarioSignerName: e.destinatarioSignature?.type && e.destinatarioSignature.type !== 'NONE' ? e.destinatarioSignature.signerName || null : null,
+    destinatarioSignedAt:
+      e.destinatarioSignature?.type && e.destinatarioSignature.type !== 'NONE'
+        ? e.destinatarioSignature.signedAt || new Date()
+        : null,
+    fechaRealizacion: e.fechaRealizacion || null,
+    fechaPrevistaEntrega: e.fechaPrevistaEntrega || null,
+    fechaEfectivaEntrega: e.fechaEfectivaEntrega || null,
+  };
+}
+
+function envioFromPrisma(e: {
+  origen: string;
+  origenDireccion: string | null;
+  destino: string;
+  destinoDireccion: string | null;
+  mercancia: string;
+  bultos: number | null;
+  pesoKg: number | null;
+  volumenM3: number | null;
+  destinatarioNombre: string | null;
+  destinatarioNif: string | null;
+  destinatarioDireccion: string | null;
+  destinatarioSignatureType: string;
+  destinatarioSignerName: string | null;
+  destinatarioSignedAt: Date | null;
+  fechaRealizacion: Date | null;
+  fechaPrevistaEntrega: Date | null;
+  fechaEfectivaEntrega: Date | null;
+}): EnvioInput {
+  return {
+    origen: e.origen,
+    origenDireccion: e.origenDireccion,
+    destino: e.destino,
+    destinoDireccion: e.destinoDireccion,
+    mercancia: e.mercancia,
+    bultos: e.bultos,
+    pesoKg: e.pesoKg,
+    volumenM3: e.volumenM3,
+    destinatarioNombre: e.destinatarioNombre,
+    destinatarioNif: e.destinatarioNif,
+    destinatarioDireccion: e.destinatarioDireccion,
+    destinatarioSignature: toSignatureBlock(e.destinatarioSignatureType, e.destinatarioSignerName, e.destinatarioSignedAt),
+    fechaRealizacion: e.fechaRealizacion,
+    fechaPrevistaEntrega: e.fechaPrevistaEntrega,
+    fechaEfectivaEntrega: e.fechaEfectivaEntrega,
+  };
+}
+
 export async function createDeca(params: CreateDecaParams) {
   const [cargador, transportista, vehiculo, conductor] = await Promise.all([
     prisma.entity.findUniqueOrThrow({ where: { id: params.cargadorEntityId } }),
@@ -70,18 +132,17 @@ export async function createDeca(params: CreateDecaParams) {
 
   const cargadorSignedAt = resolveSignedAt(params.cargadorSignature);
   const transportistaSignedAt = resolveSignedAt(params.transportistaSignature);
-  const destinatarioSignedAt = resolveSignedAt(params.destinatarioSignature);
 
   const pdfBytes = await generateDecaPdf({
     docId,
     publicUrl,
     cargador: { name: cargador.name, nif: cargador.nif, domicilio: cargador.domicilio },
     transportista: { name: transportista.name, nif: transportista.nif },
+    expedidor: { nombre: params.expedidorNombre, nif: params.expedidorNif, direccion: params.expedidorDireccion },
     cuentaAnalitica: params.cuentaAnalitica,
     conductorNombre: conductor.nombre,
     conductorDni: conductor.dni,
     envios: params.envios,
-    fecha: params.fecha,
     matricula: vehiculo.matricula,
     remolque: vehiculo.remolque,
     autorizacionEspecial: params.autorizacionEspecial,
@@ -92,12 +153,6 @@ export async function createDeca(params: CreateDecaParams) {
       params.transportistaSignature.type,
       params.transportistaSignature.signerName ?? null,
       transportistaSignedAt
-    ),
-    destinatario: { nombre: params.destinatarioNombre, nif: params.destinatarioNif },
-    destinatarioSignature: toSignatureBlock(
-      params.destinatarioSignature.type,
-      params.destinatarioSignature.signerName ?? null,
-      destinatarioSignedAt
     ),
     createdAt: now,
     updatedAt: now,
@@ -113,11 +168,13 @@ export async function createDeca(params: CreateDecaParams) {
       docId,
       cargadorEntityId: params.cargadorEntityId,
       transportistaEntityId: params.transportistaEntityId,
+      expedidorNombre: params.expedidorNombre || null,
+      expedidorNif: params.expedidorNif || null,
+      expedidorDireccion: params.expedidorDireccion || null,
       cuentaAnalitica: params.cuentaAnalitica || null,
       conductorId: params.conductorId,
       conductorNombre: conductor.nombre,
       conductorDni: conductor.dni,
-      fecha: params.fecha,
       autorizacionEspecial: params.autorizacionEspecial || null,
       vehiculoId: params.vehiculoId,
       matricula: vehiculo.matricula,
@@ -131,12 +188,6 @@ export async function createDeca(params: CreateDecaParams) {
       transportistaSignerName:
         params.transportistaSignature.type !== 'NONE' ? params.transportistaSignature.signerName || null : null,
       transportistaSignedAt,
-      destinatarioNombre: params.destinatarioNombre || null,
-      destinatarioNif: params.destinatarioNif || null,
-      destinatarioSignatureType: params.destinatarioSignature.type,
-      destinatarioSignerName:
-        params.destinatarioSignature.type !== 'NONE' ? params.destinatarioSignature.signerName || null : null,
-      destinatarioSignedAt,
       serviceStartDate: params.serviceStartDate || null,
       serviceEndDate: params.serviceEndDate || null,
       status: 'ACTIVE',
@@ -144,14 +195,7 @@ export async function createDeca(params: CreateDecaParams) {
       pdfSizeBytes: size,
       createdByUserId: params.createdByUserId,
       envios: {
-        create: params.envios.map((e) => ({
-          origen: e.origen,
-          destino: e.destino,
-          mercancia: e.mercancia,
-          bultos: e.bultos ?? null,
-          pesoKg: e.pesoKg ?? null,
-          volumenM3: e.volumenM3 ?? null,
-        })),
+        create: params.envios.map(envioToPrismaCreate),
       },
     },
     include: { envios: true, cargadorEntity: true, transportistaEntity: true, vehiculo: true, conductor: true },
@@ -166,11 +210,13 @@ export type ModifyDecaParams = {
   // Campos editables (opcional: si no se pasan, se mantienen los actuales)
   cargadorEntityId?: string;
   transportistaEntityId?: string;
+  expedidorNombre?: string | null;
+  expedidorNif?: string | null;
+  expedidorDireccion?: string | null;
   cuentaAnalitica?: string | null;
   conductorId?: string;
   vehiculoId?: string;
   envios?: EnvioInput[];
-  fecha?: Date;
   autorizacionEspecial?: string | null;
   observacionesCargador?: string | null;
   observacionesTransportista?: string | null;
@@ -184,6 +230,11 @@ function diffField(label: string, before: string | null | undefined, after: stri
   const a = (after ?? '—').toString().trim() || '—';
   if (b === a) return null;
   return { label, before: b, after: a };
+}
+
+function envioSummary(e: { origen: string; destino: string; mercancia: string; destinatarioNombre?: string | null }): string {
+  const dest = e.destinatarioNombre ? ` [${e.destinatarioNombre}]` : '';
+  return `${e.origen} -> ${e.destino} (${e.mercancia})${dest}`;
 }
 
 /**
@@ -221,11 +272,16 @@ export async function modifyDeca(params: ModifyDecaParams) {
     prisma.user.findUniqueOrThrow({ where: { id: params.changedByUserId } }),
   ]);
 
+  const currentEnviosInput: EnvioInput[] = current.envios.map(envioFromPrisma);
+
   const merged = {
     cargadorEntityId: params.cargadorEntityId ?? current.cargadorEntityId,
     cargadorEntity: newCargador ?? current.cargadorEntity,
     transportistaEntityId: params.transportistaEntityId ?? current.transportistaEntityId,
     transportistaEntity: newTransportista ?? current.transportistaEntity,
+    expedidorNombre: params.expedidorNombre !== undefined ? params.expedidorNombre : current.expedidorNombre,
+    expedidorNif: params.expedidorNif !== undefined ? params.expedidorNif : current.expedidorNif,
+    expedidorDireccion: params.expedidorDireccion !== undefined ? params.expedidorDireccion : current.expedidorDireccion,
     cuentaAnalitica: params.cuentaAnalitica !== undefined ? params.cuentaAnalitica : current.cuentaAnalitica,
     conductorId: params.conductorId ?? current.conductorId,
     conductorNombre: newConductor?.nombre ?? current.conductorNombre,
@@ -233,15 +289,7 @@ export async function modifyDeca(params: ModifyDecaParams) {
     vehiculoId: params.vehiculoId ?? current.vehiculoId,
     matricula: newVehiculo?.matricula ?? current.matricula,
     remolque: newVehiculo ? newVehiculo.remolque : current.remolque,
-    envios: params.envios ?? current.envios.map((e) => ({
-      origen: e.origen,
-      destino: e.destino,
-      mercancia: e.mercancia,
-      bultos: e.bultos,
-      pesoKg: e.pesoKg,
-      volumenM3: e.volumenM3,
-    })),
-    fecha: params.fecha ?? current.fecha,
+    envios: params.envios ?? currentEnviosInput,
     autorizacionEspecial:
       params.autorizacionEspecial !== undefined ? params.autorizacionEspecial : current.autorizacionEspecial,
     observacionesCargador:
@@ -261,16 +309,16 @@ export async function modifyDeca(params: ModifyDecaParams) {
     diffField('Matrícula', current.matricula, merged.matricula),
     diffField('Remolque', current.remolque, merged.remolque),
     diffField('Conductor', current.conductorNombre, merged.conductorNombre),
+    diffField('Expedidor', current.expedidorNombre, merged.expedidorNombre),
     diffField('Cuenta analítica / Proyecto', current.cuentaAnalitica, merged.cuentaAnalitica),
-    diffField('Fecha', current.fecha.toLocaleDateString('es-ES'), merged.fecha.toLocaleDateString('es-ES')),
     diffField('Autorización especial', current.autorizacionEspecial, merged.autorizacionEspecial),
     diffField('Observaciones cargador', current.observacionesCargador, merged.observacionesCargador),
     diffField('Observaciones transportista', current.observacionesTransportista, merged.observacionesTransportista),
   ].filter((c): c is FieldDiff => c !== null);
 
   if (params.envios) {
-    const before = current.envios.map((e) => `${e.origen} -> ${e.destino} (${e.mercancia})`).join('; ') || '—';
-    const after = merged.envios.map((e) => `${e.origen} -> ${e.destino} (${e.mercancia})`).join('; ') || '—';
+    const before = currentEnviosInput.map(envioSummary).join('; ') || '—';
+    const after = merged.envios.map(envioSummary).join('; ') || '—';
     if (before !== after) changes.push({ label: 'Envíos', before, after });
   }
 
@@ -307,11 +355,11 @@ export async function modifyDeca(params: ModifyDecaParams) {
         domicilio: merged.cargadorEntity.domicilio,
       },
       transportista: { name: merged.transportistaEntity.name, nif: merged.transportistaEntity.nif },
+      expedidor: { nombre: merged.expedidorNombre, nif: merged.expedidorNif, direccion: merged.expedidorDireccion },
       cuentaAnalitica: merged.cuentaAnalitica,
       conductorNombre: merged.conductorNombre,
       conductorDni: merged.conductorDni,
       envios: merged.envios,
-      fecha: merged.fecha,
       matricula: merged.matricula,
       remolque: merged.remolque,
       autorizacionEspecial: merged.autorizacionEspecial,
@@ -322,12 +370,6 @@ export async function modifyDeca(params: ModifyDecaParams) {
         current.transportistaSignatureType,
         current.transportistaSignerName,
         current.transportistaSignedAt
-      ),
-      destinatario: { nombre: current.destinatarioNombre, nif: current.destinatarioNif },
-      destinatarioSignature: toSignatureBlock(
-        current.destinatarioSignatureType,
-        current.destinatarioSignerName,
-        current.destinatarioSignedAt
       ),
       createdAt: current.createdAt,
       updatedAt: now,
@@ -342,6 +384,9 @@ export async function modifyDeca(params: ModifyDecaParams) {
       data: {
         cargadorEntityId: merged.cargadorEntityId,
         transportistaEntityId: merged.transportistaEntityId,
+        expedidorNombre: merged.expedidorNombre,
+        expedidorNif: merged.expedidorNif,
+        expedidorDireccion: merged.expedidorDireccion,
         cuentaAnalitica: merged.cuentaAnalitica,
         conductorId: merged.conductorId,
         conductorNombre: merged.conductorNombre,
@@ -349,7 +394,6 @@ export async function modifyDeca(params: ModifyDecaParams) {
         vehiculoId: merged.vehiculoId,
         matricula: merged.matricula,
         remolque: merged.remolque,
-        fecha: merged.fecha,
         autorizacionEspecial: merged.autorizacionEspecial,
         observacionesCargador: merged.observacionesCargador,
         observacionesTransportista: merged.observacionesTransportista,
@@ -358,14 +402,7 @@ export async function modifyDeca(params: ModifyDecaParams) {
         pdfSizeBytes: size,
         envios: {
           deleteMany: {},
-          create: merged.envios.map((e) => ({
-            origen: e.origen,
-            destino: e.destino,
-            mercancia: e.mercancia,
-            bultos: e.bultos ?? null,
-            pesoKg: e.pesoKg ?? null,
-            volumenM3: e.volumenM3 ?? null,
-          })),
+          create: merged.envios.map(envioToPrismaCreate),
         },
       },
       include: { envios: true },
@@ -393,18 +430,17 @@ export async function modifyDeca(params: ModifyDecaParams) {
 
   const cargadorSignedAt = current.cargadorSignedAt;
   const transportistaSignedAt = current.transportistaSignedAt;
-  const destinatarioSignedAt = current.destinatarioSignedAt;
 
   const pdfBytes = await generateDecaPdf({
     docId,
     publicUrl,
     cargador: { name: merged.cargadorEntity.name, nif: merged.cargadorEntity.nif, domicilio: merged.cargadorEntity.domicilio },
     transportista: { name: merged.transportistaEntity.name, nif: merged.transportistaEntity.nif },
+    expedidor: { nombre: merged.expedidorNombre, nif: merged.expedidorNif, direccion: merged.expedidorDireccion },
     cuentaAnalitica: merged.cuentaAnalitica,
     conductorNombre: merged.conductorNombre,
     conductorDni: merged.conductorDni,
     envios: merged.envios,
-    fecha: merged.fecha,
     matricula: merged.matricula,
     remolque: merged.remolque,
     autorizacionEspecial: merged.autorizacionEspecial,
@@ -412,8 +448,6 @@ export async function modifyDeca(params: ModifyDecaParams) {
     observacionesTransportista: merged.observacionesTransportista,
     cargadorSignature: toSignatureBlock(current.cargadorSignatureType, current.cargadorSignerName, cargadorSignedAt),
     transportistaSignature: toSignatureBlock(current.transportistaSignatureType, current.transportistaSignerName, transportistaSignedAt),
-    destinatario: { nombre: current.destinatarioNombre, nif: current.destinatarioNif },
-    destinatarioSignature: toSignatureBlock(current.destinatarioSignatureType, current.destinatarioSignerName, destinatarioSignedAt),
     createdAt: now,
     updatedAt: now,
     modificationHistory: history,
@@ -427,6 +461,9 @@ export async function modifyDeca(params: ModifyDecaParams) {
       docId,
       cargadorEntityId: merged.cargadorEntityId,
       transportistaEntityId: merged.transportistaEntityId,
+      expedidorNombre: merged.expedidorNombre,
+      expedidorNif: merged.expedidorNif,
+      expedidorDireccion: merged.expedidorDireccion,
       cuentaAnalitica: merged.cuentaAnalitica,
       conductorId: merged.conductorId,
       conductorNombre: merged.conductorNombre,
@@ -434,7 +471,6 @@ export async function modifyDeca(params: ModifyDecaParams) {
       vehiculoId: merged.vehiculoId,
       matricula: merged.matricula,
       remolque: merged.remolque,
-      fecha: merged.fecha,
       autorizacionEspecial: merged.autorizacionEspecial,
       observacionesCargador: merged.observacionesCargador,
       observacionesTransportista: merged.observacionesTransportista,
@@ -444,11 +480,6 @@ export async function modifyDeca(params: ModifyDecaParams) {
       transportistaSignatureType: current.transportistaSignatureType,
       transportistaSignerName: current.transportistaSignerName,
       transportistaSignedAt,
-      destinatarioNombre: current.destinatarioNombre,
-      destinatarioNif: current.destinatarioNif,
-      destinatarioSignatureType: current.destinatarioSignatureType,
-      destinatarioSignerName: current.destinatarioSignerName,
-      destinatarioSignedAt,
       serviceStartDate: current.serviceStartDate,
       serviceEndDate: merged.serviceEndDate,
       status: 'ACTIVE',
@@ -457,14 +488,7 @@ export async function modifyDeca(params: ModifyDecaParams) {
       previousVersionId: current.id,
       createdByUserId: params.changedByUserId,
       envios: {
-        create: merged.envios.map((e) => ({
-          origen: e.origen,
-          destino: e.destino,
-          mercancia: e.mercancia,
-          bultos: e.bultos ?? null,
-          pesoKg: e.pesoKg ?? null,
-          volumenM3: e.volumenM3 ?? null,
-        })),
+        create: merged.envios.map(envioToPrismaCreate),
       },
     },
   });

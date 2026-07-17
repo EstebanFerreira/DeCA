@@ -44,12 +44,14 @@ export default async function ModificarDecaPage({ params }: { params: Promise<{ 
       </p>
       <ModificarDecaForm
         decaId={deca.id}
-        fecha={toDateInput(deca.fecha)}
         autorizacionEspecial={deca.autorizacionEspecial || ''}
         observacionesCargador={deca.observacionesCargador || ''}
         observacionesTransportista={deca.observacionesTransportista || ''}
         serviceEndDate={toDateInput(deca.serviceEndDate)}
         cuentaAnalitica={deca.cuentaAnalitica || ''}
+        expedidorNombre={deca.expedidorNombre || ''}
+        expedidorNif={deca.expedidorNif || ''}
+        expedidorDireccion={deca.expedidorDireccion || ''}
         cargadores={cargadores}
         transportistas={transportistas}
         vehiculos={vehiculos}
@@ -60,11 +62,21 @@ export default async function ModificarDecaPage({ params }: { params: Promise<{ 
         currentConductorId={deca.conductorId || ''}
         envios={deca.envios.map((e) => ({
           origen: e.origen,
+          origenDireccion: e.origenDireccion || '',
           destino: e.destino,
+          destinoDireccion: e.destinoDireccion || '',
           mercancia: e.mercancia,
           bultos: e.bultos != null ? String(e.bultos) : '',
           peso: e.pesoKg != null ? String(e.pesoKg) : '',
           volumen: e.volumenM3 != null ? String(e.volumenM3) : '',
+          destinatarioNombre: e.destinatarioNombre || '',
+          destinatarioNif: e.destinatarioNif || '',
+          destinatarioDireccion: e.destinatarioDireccion || '',
+          destinatarioSignatureType: e.destinatarioSignatureType || 'NONE',
+          destinatarioSignerName: e.destinatarioSignerName || '',
+          fechaRealizacion: toDateInput(e.fechaRealizacion),
+          fechaPrevistaEntrega: toDateInput(e.fechaPrevistaEntrega),
+          fechaEfectivaEntrega: toDateInput(e.fechaEfectivaEntrega),
         }))}
       />
     </div>

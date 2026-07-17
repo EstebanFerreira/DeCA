@@ -3,11 +3,20 @@ import QRCode from 'qrcode';
 
 export type EnvioInput = {
   origen: string;
+  origenDireccion?: string | null;
   destino: string;
+  destinoDireccion?: string | null;
   mercancia: string;
   bultos?: number | null;
   pesoKg?: number | null;
   volumenM3?: number | null;
+  destinatarioNombre?: string | null;
+  destinatarioNif?: string | null;
+  destinatarioDireccion?: string | null;
+  destinatarioSignature?: SignatureBlockInput;
+  fechaRealizacion?: Date | null;
+  fechaPrevistaEntrega?: Date | null;
+  fechaEfectivaEntrega?: Date | null;
 };
 
 export type SignatureBlockInput = {
@@ -29,11 +38,11 @@ export type DecaPdfInput = {
   publicUrl: string;
   cargador: { name: string; nif: string; domicilio?: string | null };
   transportista: { name: string; nif: string };
+  expedidor?: { nombre?: string | null; nif?: string | null; direccion?: string | null } | null;
   cuentaAnalitica?: string | null;
   conductorNombre: string;
   conductorDni: string;
   envios: EnvioInput[];
-  fecha: Date;
   matricula: string;
   remolque?: string | null;
   autorizacionEspecial?: string | null;
@@ -41,8 +50,6 @@ export type DecaPdfInput = {
   observacionesTransportista?: string | null;
   cargadorSignature: SignatureBlockInput;
   transportistaSignature: SignatureBlockInput;
-  destinatario?: { nombre?: string | null; nif?: string | null } | null;
-  destinatarioSignature: SignatureBlockInput;
   createdAt: Date;
   updatedAt: Date;
   modificationHistory: ModificationEntryInput[]; // Quinto: historial completo, no solo el último motivo
@@ -54,7 +61,8 @@ const TEAL_LIGHT = rgb(0.87, 0.95, 0.95);
 const DARK = rgb(0.13, 0.13, 0.13);
 const GRAY = rgb(0.4, 0.4, 0.4);
 
-function fmtDate(d: Date): string {
+function fmtDate(d: Date | null | undefined): string {
+  if (!d) return '—';
   return d.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
@@ -229,7 +237,21 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   }
   y -= boxHeight1 + 10;
 
+  // ---- Expedidor (si se ha indicado) ----
+  const hasExpedidor = !!(input.expedidor?.nombre || input.expedidor?.nif || input.expedidor?.direccion);
+  if (hasExpedidor) {
+    newPageIfNeeded(50);
+    const expHeight = 40;
+    const c = box(margin, y, contentWidth, expHeight, 'Expedidor (Nombre, NIF, Dirección)');
+    const line = [input.expedidor?.nombre, input.expedidor?.nif ? `NIF: ${input.expedidor.nif}` : null, input.expedidor?.direccion]
+      .filter(Boolean)
+      .join('  —  ');
+    drawWrapped(page, line || '—', c.contentX, c.contentY, contentWidth - 12, font, 9, 11);
+    y -= expHeight + 10;
+  }
+
   // ---- Conductor / Cuenta analítica-Proyecto ----
+  newPageIfNeeded(50);
   const condHeight = 40;
   {
     const c = box(margin, y, colWidth, condHeight, 'Conductor');
@@ -243,44 +265,9 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   }
   y -= condHeight + 10;
 
-  // ---- c) / d) Envíos (origen, destino, mercancía, bultos, peso, volumen) ----
-  const envioRowHeight = 16;
-  const envioTableHeight = 16 + envioRowHeight * Math.max(input.envios.length, 1);
-  page.drawRectangle({
-    x: margin,
-    y: y - envioTableHeight,
-    width: contentWidth,
-    height: envioTableHeight,
-    borderColor: TEAL,
-    borderWidth: 1,
-  });
-  page.drawRectangle({ x: margin, y: y - 16, width: contentWidth, height: 16, color: TEAL_LIGHT });
-  const colOrigen = margin + 6;
-  const colDestino = margin + contentWidth * 0.24;
-  const colMercancia = margin + contentWidth * 0.5;
-  const colBultos = margin + contentWidth * 0.76;
-  const colPeso = margin + contentWidth * 0.86;
-  page.drawText('c) Origen', { x: colOrigen, y: y - 12, size: 8, font: fontBold, color: TEAL });
-  page.drawText('Destino', { x: colDestino, y: y - 12, size: 8, font: fontBold, color: TEAL });
-  page.drawText('d) Naturaleza de la mercancía', { x: colMercancia, y: y - 12, size: 8, font: fontBold, color: TEAL });
-  page.drawText('Bultos', { x: colBultos, y: y - 12, size: 8, font: fontBold, color: TEAL });
-  page.drawText('Peso(kg)/Vol(m3)', { x: colPeso, y: y - 12, size: 7, font: fontBold, color: TEAL });
-
-  let rowY = y - 16 - 12;
-  const envios = input.envios.length ? input.envios : [{ origen: '—', destino: '—', mercancia: '—' }];
-  for (const envio of envios) {
-    page.drawText(truncate(envio.origen, 26), { x: colOrigen, y: rowY, size: 8, font, color: DARK });
-    page.drawText(truncate(envio.destino, 26), { x: colDestino, y: rowY, size: 8, font, color: DARK });
-    page.drawText(truncate(envio.mercancia, 30), { x: colMercancia, y: rowY, size: 8, font, color: DARK });
-    page.drawText(envio.bultos != null ? String(envio.bultos) : '-', { x: colBultos, y: rowY, size: 8, font, color: DARK });
-    const pesoVol = `${envio.pesoKg ?? '-'} / ${envio.volumenM3 ?? '-'}`;
-    page.drawText(pesoVol, { x: colPeso, y: rowY, size: 7, font, color: DARK });
-    rowY -= envioRowHeight;
-  }
-  y -= envioTableHeight + 10;
-
-  // ---- f) Fecha / g) Matrícula / e) Autorización especial ----
-  const vehHeight = 44;
+  // ---- g) Matrícula / e) Autorización especial ----
+  newPageIfNeeded(40);
+  const vehHeight = 34;
   page.drawRectangle({
     x: margin,
     y: y - vehHeight,
@@ -291,24 +278,116 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   });
   page.drawRectangle({ x: margin, y: y - 14, width: contentWidth, height: 14, color: TEAL_LIGHT });
   const vc1 = margin + 6;
-  const vc2 = margin + contentWidth * 0.33;
-  const vc3 = margin + contentWidth * 0.66;
-  page.drawText('f) Fecha', { x: vc1, y: y - 11, size: 8, font: fontBold, color: TEAL });
-  page.drawText('g) Matrícula / Remolque', { x: vc2, y: y - 11, size: 8, font: fontBold, color: TEAL });
-  page.drawText('e) Autorización especial', { x: vc3, y: y - 11, size: 8, font: fontBold, color: TEAL });
-  const vy = y - 30;
-  page.drawText(fmtDate(input.fecha), { x: vc1, y: vy, size: 9, font, color: DARK });
+  const vc2 = margin + contentWidth * 0.5;
+  page.drawText('g) Matrícula / Remolque', { x: vc1, y: y - 11, size: 8, font: fontBold, color: TEAL });
+  page.drawText('e) Autorización especial de circulación', { x: vc2, y: y - 11, size: 8, font: fontBold, color: TEAL });
+  const vy = y - 26;
   page.drawText(`${input.matricula}${input.remolque ? ' / ' + input.remolque : ''}`, {
-    x: vc2,
+    x: vc1,
     y: vy,
     size: 9,
     font,
     color: DARK,
   });
-  page.drawText(input.autorizacionEspecial || '—', { x: vc3, y: vy, size: 9, font, color: DARK });
+  page.drawText(input.autorizacionEspecial || '—', { x: vc2, y: vy, size: 9, font, color: DARK });
   y -= vehHeight + 10;
 
+  // ---- Envíos: una tarjeta por envío (Sexto de la resolución) ----
+  newPageIfNeeded(24);
+  page.drawText('c) / d) Envíos', { x: margin, y, size: 10, font: fontBold, color: TEAL });
+  y -= 16;
+
+  const envios = input.envios.length ? input.envios : [];
+  envios.forEach((envio, idx) => {
+    const hasDirecciones = !!(envio.origenDireccion || envio.destinoDireccion);
+    const hasDestinatario = !!(envio.destinatarioNombre || envio.destinatarioNif || envio.destinatarioDireccion);
+    const hasFechas = !!(envio.fechaRealizacion || envio.fechaPrevistaEntrega || envio.fechaEfectivaEntrega);
+    const hasFirma = !!(envio.destinatarioSignature && envio.destinatarioSignature.type !== 'NONE');
+
+    let lineCount = 2; // título + mercancía/bultos/peso/vol
+    if (hasDirecciones) lineCount += 1;
+    if (hasDestinatario) lineCount += 1;
+    if (hasFechas) lineCount += 1;
+    if (hasFirma) lineCount += 1;
+    const cardHeight = 14 + lineCount * 12 + 8;
+
+    newPageIfNeeded(cardHeight + 10);
+
+    page.drawRectangle({
+      x: margin,
+      y: y - cardHeight,
+      width: contentWidth,
+      height: cardHeight,
+      borderColor: TEAL,
+      borderWidth: 1,
+    });
+    page.drawRectangle({ x: margin, y: y - 14, width: contentWidth, height: 14, color: TEAL_LIGHT });
+    page.drawText(
+      `Envío ${idx + 1}: ${truncate(envio.origen, 30)} -> ${truncate(envio.destino, 30)}`,
+      { x: margin + 6, y: y - 11, size: 8, font: fontBold, color: TEAL }
+    );
+
+    let ly = y - 26;
+    ly = drawWrapped(
+      page,
+      `Mercancía: ${envio.mercancia}   Bultos: ${envio.bultos ?? '—'}   Peso: ${envio.pesoKg ?? '—'} kg   Volumen: ${envio.volumenM3 ?? '—'} m3`,
+      margin + 6,
+      ly,
+      contentWidth - 12,
+      font,
+      8,
+      12
+    );
+    if (hasDirecciones) {
+      ly = drawWrapped(
+        page,
+        `Dirección origen: ${envio.origenDireccion || '—'}   |   Dirección destino: ${envio.destinoDireccion || '—'}`,
+        margin + 6,
+        ly,
+        contentWidth - 12,
+        font,
+        8,
+        12,
+        GRAY
+      );
+    }
+    if (hasDestinatario) {
+      const destLine = [
+        envio.destinatarioNombre,
+        envio.destinatarioNif ? `NIF: ${envio.destinatarioNif}` : null,
+        envio.destinatarioDireccion,
+      ]
+        .filter(Boolean)
+        .join('  —  ');
+      ly = drawWrapped(page, `Destinatario: ${destLine || '—'}`, margin + 6, ly, contentWidth - 12, font, 8, 12);
+    }
+    if (hasFechas) {
+      ly = drawWrapped(
+        page,
+        `Fecha transporte: ${fmtDate(envio.fechaRealizacion)}   Entrega prevista: ${fmtDate(envio.fechaPrevistaEntrega)}   Entrega efectiva: ${fmtDate(envio.fechaEfectivaEntrega)}`,
+        margin + 6,
+        ly,
+        contentWidth - 12,
+        font,
+        8,
+        12,
+        GRAY
+      );
+    }
+    if (hasFirma && envio.destinatarioSignature) {
+      const sig = envio.destinatarioSignature;
+      const sigLine = `Firma destinatario: ${signatureLabel(sig.type)} — Firmante: ${sig.signerName || '—'}${
+        sig.signedAt ? ' — ' + fmtDateTime(sig.signedAt) : ''
+      }`;
+      drawWrapped(page, sigLine, margin + 6, ly, contentWidth - 12, fontItalic, 7.5, 12, TEAL);
+    }
+
+    y -= cardHeight + 8;
+  });
+  y -= 2;
+
   // ---- h) Observaciones ----
+  newPageIfNeeded(64);
   const obsHeight = 54;
   {
     const c = box(margin, y, colWidth, obsHeight, 'h) Observaciones — Cargador contractual');
@@ -321,17 +400,14 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   }
   y -= obsHeight + 10;
 
-  // ---- Firmas: Cargador contractual / Transportista efectivo / Destinatario ----
+  // ---- Firmas: Cargador contractual / Transportista efectivo ----
   newPageIfNeeded(70);
-  const sigColWidth = (contentWidth - 16) / 3;
-  const sigHeight = 58;
-  function signatureBox(x: number, title: string, sig: SignatureBlockInput, extraLine?: string) {
+  const sigColWidth = (contentWidth - 8) / 2;
+  const sigHeight = 50;
+  function signatureBox(x: number, title: string, sig: SignatureBlockInput) {
     const c = box(x, y, sigColWidth, sigHeight, title);
     let ty = c.contentY;
     ty = drawWrapped(page, signatureLabel(sig.type), c.contentX, ty, sigColWidth - 12, fontBold, 7.5, 9, TEAL);
-    if (extraLine) {
-      ty = drawWrapped(page, extraLine, c.contentX, ty, sigColWidth - 12, font, 7.5, 9, DARK);
-    }
     if (sig.type !== 'NONE') {
       ty = drawWrapped(page, `Firmante: ${sig.signerName || '—'}`, c.contentX, ty, sigColWidth - 12, font, 7.5, 9);
       if (sig.signedAt) {
@@ -341,13 +417,12 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   }
   signatureBox(margin, 'Firma — Cargador contractual', input.cargadorSignature);
   signatureBox(margin + sigColWidth + 8, 'Firma — Transportista efectivo', input.transportistaSignature);
-  signatureBox(
-    margin + (sigColWidth + 8) * 2,
-    'Firma — Destinatario',
-    input.destinatarioSignature,
-    input.destinatario?.nombre ? `${input.destinatario.nombre}${input.destinatario.nif ? ' (' + input.destinatario.nif + ')' : ''}` : undefined
-  );
   y -= sigHeight + 10;
+  page.drawText(
+    'La firma del destinatario de cada envío figura en su tarjeta correspondiente en el apartado de Envíos.',
+    { x: margin, y, size: 7, font: fontItalic, color: GRAY }
+  );
+  y -= 14;
 
   // ---- Historial completo de modificaciones (Quinto de la resolución) ----
   if (input.modificationHistory.length > 0) {
@@ -406,7 +481,7 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   );
   ay = drawWrapped(
     page,
-    'Transportista efectivo: titular de la autorización a cuyo amparo se realiza materialmente el transporte.',
+    'Transportista efectivo: titular de la autorización a cuyo amparo se realiza materialmente el transporte. Expedidor: tercero que, por cuenta del cargador, entrega la mercancía al transportista en el lugar de recepción.',
     margin + 8,
     ay,
     contentWidth - 16,
@@ -417,7 +492,7 @@ export async function generateDecaPdf(input: DecaPdfInput): Promise<Uint8Array> 
   );
   ay = drawWrapped(
     page,
-    'Los datos de los apartados a), c) y d) son responsabilidad del Cargador contractual. Los datos de los apartados e), f) y g) son responsabilidad del Transportista efectivo.',
+    'Los datos de los apartados a), c) y d) son responsabilidad del Cargador contractual. Los datos de los apartados e) y g) son responsabilidad del Transportista efectivo.',
     margin + 8,
     ay,
     contentWidth - 16,

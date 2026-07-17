@@ -58,7 +58,7 @@ export default async function DashboardPage() {
                 <th className="text-left px-4 py-2 font-medium">Cargador contractual</th>
                 <th className="text-left px-4 py-2 font-medium">Transportista efectivo</th>
                 <th className="text-left px-4 py-2 font-medium">Envíos</th>
-                <th className="text-left px-4 py-2 font-medium">Fecha</th>
+                <th className="text-left px-4 py-2 font-medium">Creado</th>
                 <th className="text-left px-4 py-2 font-medium">Estado</th>
                 <th className="text-right px-4 py-2 font-medium">Acciones</th>
               </tr>
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
                     {d.envios[0]?.origen} → {d.envios[0]?.destino}
                     {d.envios.length > 1 ? ` (+${d.envios.length - 1})` : ''}
                   </td>
-                  <td className="px-4 py-2">{d.fecha.toLocaleDateString('es-ES')}</td>
+                  <td className="px-4 py-2">{d.createdAt.toLocaleDateString('es-ES')}</td>
                   <td className="px-4 py-2">
                     <StatusBadge status={d.status} serviceEndDate={d.serviceEndDate} />
                   </td>

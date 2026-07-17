@@ -108,6 +108,19 @@ export default function NuevoDecaForm({
         </div>
       </div>
 
+      <div className="card p-5">
+        <label className="label">Expedidor (opcional)</label>
+        <p className="text-xs text-gray-500 mb-2">
+          Tercero que, por cuenta del cargador, entrega la mercancía al transportista en el lugar de recepción
+          (distinto del cargador contractual).
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input className="input" name="expedidorNombre" placeholder="Nombre" />
+          <input className="input" name="expedidorNif" placeholder="NIF" />
+          <input className="input" name="expedidorDireccion" placeholder="Dirección" />
+        </div>
+      </div>
+
       <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">g) Vehículo (matrícula)</label>
@@ -152,11 +165,7 @@ export default function NuevoDecaForm({
         <EnviosEditor />
       </div>
 
-      <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="label">f) Fecha del transporte</label>
-          <input className="input" type="date" name="fecha" required />
-        </div>
+      <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">e) Autorización especial de circulación</label>
           <input className="input" name="autorizacionEspecial" />
@@ -180,19 +189,14 @@ export default function NuevoDecaForm({
         </div>
       </div>
 
-      <div className="card p-5 space-y-2">
-        <label className="label">Destinatario (opcional, para la firma de entrega)</label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input className="input" name="destinatarioNombre" placeholder="Nombre del destinatario" />
-          <input className="input" name="destinatarioNif" placeholder="NIF del destinatario" />
-        </div>
-      </div>
-
       <div className="card p-5 space-y-4">
         <p className="label !mb-0">Firmas (solo si el DeCA también tiene finalidad contractual)</p>
         <SignatureFields prefix="cargador" title="Firma — Cargador contractual" />
         <SignatureFields prefix="transportista" title="Firma — Transportista efectivo" />
-        <SignatureFields prefix="destinatario" title="Firma — Destinatario" />
+        <p className="text-xs text-gray-500">
+          La firma del destinatario se recoge por cada envío (sección Envíos), ya que cada uno puede entregarse en
+          un momento y a una persona distintos.
+        </p>
       </div>
 
       {state?.error && (

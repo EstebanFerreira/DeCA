@@ -83,6 +83,12 @@ model DecaDocument {
   transportistaEntityId String
   transportistaEntity   Entity @relation("TransportistaEfectivo", fields: [transportistaEntityId], references: [id])
 
+  // Expedidor: tercero que, por cuenta del cargador, entrega la mercancía al
+  // transportista en el lugar de recepción (distinto del cargador contractual).
+  expedidorNombre    String?
+  expedidorNif       String?
+  expedidorDireccion String?
+
   // Cuenta analítica / proyecto (campo libre)
   cuentaAnalitica String?
 
@@ -93,9 +99,8 @@ model DecaDocument {
   conductorNombre String
   conductorDni    String
 
-  // e) Autorización especial de circulación / f) fecha
-  fecha                 DateTime
-  autorizacionEspecial  String?
+  // e) Autorización especial de circulación
+  autorizacionEspecial String?
 
   // g) Matrícula (lista reutilizable del transportista efectivo) — snapshot de
   // matrícula/remolque en el momento de guardar. Cualquier cambio de vehículo entre
@@ -110,7 +115,10 @@ model DecaDocument {
   observacionesTransportista String?
 
   // Cuarto de la resolución: firmas — solo si el DeCA también tiene finalidad
-  // contractual. Un bloque independiente por cada parte que deba firmar.
+  // contractual. Cargador y transportista firman el documento completo; el
+  // destinatario firma cada envío individualmente en el momento de su entrega
+  // (ver modelo Envio), ya que un mismo DeCA puede agrupar envíos a destinatarios
+  // y fechas de entrega distintos.
   cargadorSignatureType String  @default("NONE") // NONE | ADVANCED | QUALIFIED
   cargadorSignerName    String?
   cargadorSignedAt      DateTime?
@@ -118,12 +126,6 @@ model DecaDocument {
   transportistaSignatureType String  @default("NONE")
   transportistaSignerName    String?
   transportistaSignedAt      DateTime?
-
-  destinatarioNombre         String?
-  destinatarioNif            String?
-  destinatarioSignatureType  String  @default("NONE")
-  destinatarioSignerName     String?
-  destinatarioSignedAt       DateTime?
 
   // Ciclo de vida del servicio / documento
   serviceStartDate DateTime?
@@ -149,20 +151,40 @@ model DecaDocument {
   modificationLogs ModificationLog[]
 }
 
-// Sexto de la resolución: agrupación de varios envíos en un único DeCA,
-// siempre con mismo cargador contractual y mismo transportista efectivo,
-// identificando cada envío por origen, destino y mercancía.
+// Sexto de la resolución: agrupación de varios envíos en un único DeCA, siempre con
+// mismo cargador contractual y mismo transportista efectivo. Cada envío se identifica
+// con su origen, destino y mercancía, y tiene su propio destinatario, direcciones
+// completas y fechas de transporte/entrega, ya que pueden diferir entre envíos
+// agrupados en el mismo documento.
 model Envio {
   id             String       @id @default(cuid())
   decaDocumentId String
   decaDocument   DecaDocument @relation(fields: [decaDocumentId], references: [id], onDelete: Cascade)
 
-  origen    String
-  destino   String
-  mercancia String
-  bultos    Int?
-  pesoKg    Float?
-  volumenM3 Float?
+  origen          String
+  origenDireccion String?
+  destino         String
+  destinoDireccion String?
+  mercancia       String
+  bultos          Int?
+  pesoKg          Float?
+  volumenM3       Float?
+
+  // Destinatario del envío (Nombre, NIF, Dirección) — puede variar entre envíos
+  // agrupados en el mismo DeCA.
+  destinatarioNombre    String?
+  destinatarioNif       String?
+  destinatarioDireccion String?
+
+  // Firma del destinatario a la entrega de este envío en concreto.
+  destinatarioSignatureType String  @default("NONE") // NONE | ADVANCED | QUALIFIED
+  destinatarioSignerName    String?
+  destinatarioSignedAt      DateTime?
+
+  // Fechas propias de este envío.
+  fechaRealizacion     DateTime?
+  fechaPrevistaEntrega DateTime?
+  fechaEfectivaEntrega DateTime?
 }
 
 model ModificationLog {

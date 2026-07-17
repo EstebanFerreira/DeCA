@@ -93,29 +93,48 @@ async function main() {
   const existingDecas = await prisma.decaDocument.count();
   if (existingDecas === 0) {
     const hoy = new Date();
+    const enTresDias = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
     const enDiezDias = new Date(hoy.getTime() + 10 * 24 * 60 * 60 * 1000);
     const haceVeinteDias = new Date(hoy.getTime() - 20 * 24 * 60 * 60 * 1000);
+    const haceDieciocho = new Date(hoy.getTime() - 18 * 24 * 60 * 60 * 1000);
     const haceQuinceDias = new Date(hoy.getTime() - 15 * 24 * 60 * 60 * 1000);
 
     const deca1 = await createDeca({
       cargadorEntityId: cargador.id,
       transportistaEntityId: transportista.id,
+      expedidorNombre: 'Almacén Central Norte S.L.',
+      expedidorNif: 'B99887766',
+      expedidorDireccion: 'Polígono Industrial Norte, Nave 4, 28935 Móstoles',
       cuentaAnalitica: 'PROY-2026-014',
       conductorId: conductor1.id,
       vehiculoId: vehiculo1.id,
       envios: [
-        { origen: 'Madrid', destino: 'Barcelona', mercancia: 'Material de construcción', bultos: 20, pesoKg: 3200, volumenM3: 18 },
+        {
+          origen: 'Madrid',
+          origenDireccion: 'Polígono Industrial Norte, Nave 4, 28935 Móstoles',
+          destino: 'Barcelona',
+          destinoDireccion: 'C/ Consell de Cent 200, 08011 Barcelona',
+          mercancia: 'Material de construcción',
+          bultos: 20,
+          pesoKg: 3200,
+          volumenM3: 18,
+          destinatarioNombre: 'Constructora Balear S.A.',
+          destinatarioNif: 'A11223344',
+          destinatarioDireccion: 'C/ Consell de Cent 200, 08011 Barcelona',
+          destinatarioSignature: { type: 'NONE' },
+          fechaRealizacion: hoy,
+          fechaPrevistaEntrega: enTresDias,
+          fechaEfectivaEntrega: null,
+        },
       ],
-      fecha: hoy,
       autorizacionEspecial: null,
       serviceStartDate: hoy,
       serviceEndDate: enDiezDias,
       cargadorSignature: { type: 'NONE' },
       transportistaSignature: { type: 'NONE' },
-      destinatarioSignature: { type: 'NONE' },
       createdByUserId: admin.id,
     });
-    console.log('DeCA de demostración #1 creado (activo).');
+    console.log('DeCA de demostración #1 creado (activo, con expedidor y destinatario por envío).');
 
     // Dos modificaciones encadenadas para demostrar que el historial completo (no solo la
     // última) queda registrado y se incluye en el PDF descargado.
@@ -143,21 +162,44 @@ async function main() {
       conductorId: conductor2.id,
       vehiculoId: vehiculo2.id,
       envios: [
-        { origen: 'Valencia', destino: 'Sevilla', mercancia: 'Palets de bebidas', bultos: 40, pesoKg: 5400, volumenM3: 30 },
-        { origen: 'Valencia', destino: 'Córdoba', mercancia: 'Palets de conservas', bultos: 15, pesoKg: 1800, volumenM3: 9 },
+        {
+          origen: 'Valencia',
+          destino: 'Sevilla',
+          mercancia: 'Palets de bebidas',
+          bultos: 40,
+          pesoKg: 5400,
+          volumenM3: 30,
+          destinatarioNombre: 'Almacenes del Sur S.L.',
+          destinatarioNif: 'B11223344',
+          destinatarioDireccion: 'Polígono El Pino, Sevilla',
+          destinatarioSignature: { type: 'ADVANCED', signerName: 'Pedro Sánchez (recepción)' },
+          fechaRealizacion: haceVeinteDias,
+          fechaPrevistaEntrega: haceDieciocho,
+          fechaEfectivaEntrega: haceDieciocho,
+        },
+        {
+          origen: 'Valencia',
+          destino: 'Córdoba',
+          mercancia: 'Palets de conservas',
+          bultos: 15,
+          pesoKg: 1800,
+          volumenM3: 9,
+          destinatarioNombre: 'Distribuciones Córdoba S.L.',
+          destinatarioNif: 'B55667788',
+          destinatarioSignature: { type: 'NONE' },
+          fechaRealizacion: haceVeinteDias,
+          fechaPrevistaEntrega: haceDieciocho,
+          fechaEfectivaEntrega: null,
+        },
       ],
-      fecha: haceVeinteDias,
       autorizacionEspecial: null,
       serviceStartDate: haceVeinteDias,
       serviceEndDate: haceQuinceDias, // ya pasó la ventana de 7 días -> se mostrará como desactivable
       cargadorSignature: { type: 'ADVANCED', signerName: 'Ana Gómez (cargador)' },
       transportistaSignature: { type: 'ADVANCED', signerName: 'Juan Pérez García (conductor)' },
-      destinatarioNombre: 'Almacenes del Sur S.L.',
-      destinatarioNif: 'B11223344',
-      destinatarioSignature: { type: 'ADVANCED', signerName: 'Pedro Sánchez (recepción)' },
       createdByUserId: admin.id,
     });
-    console.log('DeCA de demostración #2 creado (agrupa 2 envíos, 3 firmas, ventana de 7 días superada).');
+    console.log('DeCA de demostración #2 creado (agrupa 2 envíos con destinatarios y fechas distintas, ventana de 7 días superada).');
   }
 
   console.log('\nUsuarios de demostración:');

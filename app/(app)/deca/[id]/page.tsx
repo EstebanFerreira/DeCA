@@ -39,6 +39,10 @@ function SignatureCard({
   );
 }
 
+function fmtDate(d: Date | null): string {
+  return d ? d.toLocaleDateString('es-ES') : '—';
+}
+
 export default async function DecaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
@@ -67,6 +71,7 @@ export default async function DecaDetailPage({ params }: { params: Promise<{ id:
     deca.status === 'ACTIVE' && pastWindow ? 'DOWNLOAD_DISABLED' : (deca.status as DecaStatus);
 
   const canManage = session.role === 'ADMIN' || session.userId === deca.createdByUserId;
+  const hasExpedidor = !!(deca.expedidorNombre || deca.expedidorNif || deca.expedidorDireccion);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -138,10 +143,6 @@ export default async function DecaDetailPage({ params }: { params: Promise<{ id:
           <p className="font-medium">{deca.cuentaAnalitica || '—'}</p>
         </div>
         <div>
-          <p className="text-gray-500">f) Fecha</p>
-          <p className="font-medium">{deca.fecha.toLocaleDateString('es-ES')}</p>
-        </div>
-        <div>
           <p className="text-gray-500">g) Matrícula / Remolque</p>
           <p className="font-medium">
             {deca.matricula}
@@ -164,9 +165,21 @@ export default async function DecaDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
+      {hasExpedidor && (
+        <div className="card p-5 text-sm">
+          <p className="text-gray-500 mb-1">Expedidor</p>
+          <p className="font-medium">{deca.expedidorNombre || '—'}</p>
+          <p className="text-gray-500">
+            {deca.expedidorNif ? `NIF ${deca.expedidorNif}` : ''}
+            {deca.expedidorNif && deca.expedidorDireccion ? ' · ' : ''}
+            {deca.expedidorDireccion || ''}
+          </p>
+        </div>
+      )}
+
       <div className="card p-5">
-        <p className="text-gray-500 text-sm mb-3">Firmas</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <p className="text-gray-500 text-sm mb-3">Firmas del documento</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SignatureCard
             title="Cargador contractual"
             type={deca.cargadorSignatureType}
@@ -179,42 +192,57 @@ export default async function DecaDetailPage({ params }: { params: Promise<{ id:
             signerName={deca.transportistaSignerName}
             signedAt={deca.transportistaSignedAt}
           />
-          <SignatureCard
-            title="Destinatario"
-            type={deca.destinatarioSignatureType}
-            signerName={deca.destinatarioSignerName}
-            signedAt={deca.destinatarioSignedAt}
-            extra={deca.destinatarioNombre ? `${deca.destinatarioNombre}${deca.destinatarioNif ? ' (' + deca.destinatarioNif + ')' : ''}` : undefined}
-          />
         </div>
+        <p className="text-xs text-gray-400 mt-2">
+          La firma del destinatario de cada envío se muestra en su tarjeta correspondiente, más abajo.
+        </p>
       </div>
 
-      <div className="card p-5">
-        <p className="text-gray-500 text-sm mb-2">c) / d) Envíos</p>
-        <table className="min-w-full text-sm">
-          <thead className="text-gray-500">
-            <tr>
-              <th className="text-left py-1">Origen</th>
-              <th className="text-left py-1">Destino</th>
-              <th className="text-left py-1">Mercancía</th>
-              <th className="text-left py-1">Bultos</th>
-              <th className="text-left py-1">Kg / m³</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deca.envios.map((e) => (
-              <tr key={e.id} className="border-t border-gray-100">
-                <td className="py-1">{e.origen}</td>
-                <td className="py-1">{e.destino}</td>
-                <td className="py-1">{e.mercancia}</td>
-                <td className="py-1">{e.bultos ?? '—'}</td>
-                <td className="py-1">
-                  {e.pesoKg ?? '—'} / {e.volumenM3 ?? '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-3">
+        <p className="text-gray-500 text-sm">c) / d) Envíos</p>
+        {deca.envios.map((e, idx) => (
+          <div key={e.id} className="card p-5 text-sm space-y-2">
+            <p className="font-semibold text-gray-800">
+              Envío {idx + 1}: {e.origen} → {e.destino}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <p>
+                <span className="text-gray-500">Dirección origen: </span>
+                {e.origenDireccion || '—'}
+              </p>
+              <p>
+                <span className="text-gray-500">Dirección destino: </span>
+                {e.destinoDireccion || '—'}
+              </p>
+            </div>
+            <p>
+              <span className="text-gray-500">Mercancía: </span>
+              {e.mercancia} <span className="text-gray-500">· Bultos: </span>
+              {e.bultos ?? '—'} <span className="text-gray-500">· Peso: </span>
+              {e.pesoKg ?? '—'} kg <span className="text-gray-500">· Volumen: </span>
+              {e.volumenM3 ?? '—'} m³
+            </p>
+            <div className="border-t border-gray-100 pt-2">
+              <p className="text-gray-500 text-xs mb-1">Destinatario</p>
+              <p>
+                {e.destinatarioNombre || '—'}
+                {e.destinatarioNif ? ` (NIF ${e.destinatarioNif})` : ''}
+                {e.destinatarioDireccion ? ` — ${e.destinatarioDireccion}` : ''}
+              </p>
+              {e.destinatarioSignatureType !== 'NONE' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {SIGNATURE_LABELS[e.destinatarioSignatureType as SignatureType]} — Firmante:{' '}
+                  {e.destinatarioSignerName || '—'}
+                  {e.destinatarioSignedAt ? ` (${e.destinatarioSignedAt.toLocaleString('es-ES')})` : ''}
+                </p>
+              )}
+            </div>
+            <div className="border-t border-gray-100 pt-2 text-xs text-gray-600">
+              Fecha transporte: {fmtDate(e.fechaRealizacion)} · Entrega prevista: {fmtDate(e.fechaPrevistaEntrega)} ·
+              Entrega efectiva: {fmtDate(e.fechaEfectivaEntrega)}
+            </div>
+          </div>
+        ))}
       </div>
 
       {(deca.observacionesCargador || deca.observacionesTransportista) && (
